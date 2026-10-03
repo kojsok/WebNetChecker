@@ -1,0 +1,154 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------ */
+/* Design tokens — dark techno monitoring dashboard                    */
+/* ------------------------------------------------------------------ */
+@theme {
+  --color-void: #000000;
+  --color-carbon: #111111;
+  --color-graphite: #1a1a1a;
+  --color-steel: #2a2a2a;
+  --color-silver: #c0c0c0;
+  --color-silver-bright: #e5e5e5;
+
+  --color-neon: #ff5e00;
+  --color-neon-dim: #7a2d00;
+  --color-ok: #00ff88;
+  --color-ok-dim: #003d21;
+  --color-blocked: #ff2244;
+  --color-blocked-dim: #3d000f;
+  --color-pending: #ff5e00;
+
+  --font-display: var(--font-display), "Archivo Black", system-ui, sans-serif;
+  --font-condensed: var(--font-condensed), "Oswald", system-ui, sans-serif;
+  --font-mono: var(--font-mono), "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-none: 0px;
+
+  --animate-pulse-neon: pulse-neon 1.4s ease-in-out infinite;
+  --animate-scan-sweep: scan-sweep 2.2s linear infinite;
+
+  --breakpoint-xs: 20rem;
+}
+
+@keyframes pulse-neon {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-neon) 55%, transparent);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 12px 2px color-mix(in srgb, var(--color-neon) 35%, transparent);
+  }
+}
+
+@keyframes scan-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+:root {
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--color-steel);
+}
+
+html {
+  background-color: var(--color-void);
+}
+
+body {
+  background-color: var(--color-void);
+  color: var(--color-silver-bright);
+  font-family: var(--font-condensed);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Faint carbon/concrete texture behind everything. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image:
+    repeating-linear-gradient(45deg, #fff 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, #fff 0 1px, transparent 1px 3px);
+}
+
+/* Film-grain noise layer. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+::selection {
+  background: var(--color-neon);
+  color: var(--color-void);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-neon);
+  outline-offset: 2px;
+}
+
+/* Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-steel) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: var(--color-carbon);
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-steel);
+  border: 2px solid var(--color-carbon);
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--color-neon-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Utilities                                                           */
+/* ------------------------------------------------------------------ */
+@utility text-glow-neon {
+  text-shadow: 0 0 10px color-mix(in srgb, var(--color-neon) 60%, transparent);
+}
+@utility text-glow-ok {
+  text-shadow: 0 0 10px color-mix(in srgb, var(--color-ok) 60%, transparent);
+}
+@utility text-glow-blocked {
+  text-shadow: 0 0 10px color-mix(in srgb, var(--color-blocked) 60%, transparent);
+}
