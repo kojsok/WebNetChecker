@@ -172,6 +172,7 @@ export default function HomePage() {
             <CategorySection
               key={group.id}
               label={group.label}
+              categoryId={group.id}
               entries={group.items}
               onRetry={retryOne}
               onTogglePin={pinOne}

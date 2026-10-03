@@ -1,6 +1,8 @@
 "use client";
 
 import { useScanStore } from "@/store/scan-store";
+import { BrandLogo } from "@/components/BrandLogo";
+import { hostFromUrl } from "@/lib/brand-logo";
 import { useScan } from "@/hooks/useScan";
 import type { Target } from "@/types/checker";
 import { cn } from "@/lib/cn";
@@ -10,7 +12,7 @@ function ComparisonChart({
   targetA,
   targetB,
   historyA,
-  historyB
+  historyB,
 }: {
   targetA: Target | null;
   targetB: Target | null;
@@ -19,7 +21,7 @@ function ComparisonChart({
 }) {
   if (!targetA || !targetB) {
     return (
-      <div className="flex h-64 items-center justify-center border border-steel bg-void text-silver/40 font-mono text-xs italic">
+      <div className="border-steel bg-void text-silver/40 flex h-64 items-center justify-center border font-mono text-xs italic">
         Выберите два сервиса для сравнения
       </div>
     );
@@ -33,28 +35,36 @@ function ComparisonChart({
   const height = 200;
 
   const getPoints = (data: number[]) => {
-    return data.map((v, i) => {
-      const x = (i / 9) * width;
-      const y = height - ((v - min) / range) * height;
-      return `${x},${y}`;
-    }).join(" ");
+    return data
+      .map((v, i) => {
+        const x = (i / 9) * width;
+        const y = height - ((v - min) / range) * height;
+        return `${x},${y}`;
+      })
+      .join(" ");
   };
 
   return (
-    <div className="relative w-full bg-carbon border border-steel p-4 overflow-hidden">
-      <div className="flex justify-between mb-4 font-mono text-[11px] uppercase tracking-widest">
+    <div className="bg-carbon border-steel relative w-full overflow-hidden border p-4">
+      <div className="mb-4 flex justify-between font-mono text-[11px] tracking-widest uppercase">
         <span className="text-neon">{targetA.name}</span>
         <span className="text-silver/40">Latency Trend (last 10 checks)</span>
         <span className="text-silver-bright">{targetB.name}</span>
       </div>
-      <div className="relative h-64 w-full bg-void border-b border-l border-steel overflow-hidden">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full h-full overflow-visible">
+      <div className="bg-void border-steel relative h-64 w-full overflow-hidden border-b border-l">
+        <svg viewBox={`0 0 ${width} ${height}`} className="h-full w-full overflow-visible">
           {/* Grid lines */}
           {[0, 0.25, 0.5, 0.75, 1].map((perc) => (
             <line
               key={perc}
-              x1="0" y1={height * perc} x2={width} y2={height * perc}
-              stroke="currentColor" className="text-steel" strokeWidth="1" strokeDasharray="4 4"
+              x1="0"
+              y1={height * perc}
+              x2={width}
+              y2={height * perc}
+              stroke="currentColor"
+              className="text-steel"
+              strokeWidth="1"
+              strokeDasharray="4 4"
             />
           ))}
 
@@ -79,12 +89,12 @@ function ComparisonChart({
           />
         </svg>
       </div>
-      <div className="flex justify-center gap-6 mt-4 font-mono text-[10px] uppercase">
+      <div className="mt-4 flex justify-center gap-6 font-mono text-[10px] uppercase">
         <div className="flex items-center gap-2">
-          <div className="size-2 bg-neon" /> {targetA.name}
+          <div className="bg-neon size-2" /> {targetA.name}
         </div>
         <div className="flex items-center gap-2">
-          <div className="size-2 bg-ok" /> {targetB.name}
+          <div className="bg-ok size-2" /> {targetB.name}
         </div>
       </div>
     </div>
@@ -118,10 +128,14 @@ export function ComparisonView() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 border border-steel bg-carbon p-4">
+      <div className="border-steel bg-carbon flex flex-wrap items-center justify-between gap-4 border p-4">
         <div className="flex flex-col gap-1">
-          <h2 className="font-display text-sm tracking-[0.2em] text-silver-bright uppercase">Сравнение latency</h2>
-          <p className="font-mono text-[10px] text-silver/50 uppercase">Выберите два сервиса для анализа динамики</p>
+          <h2 className="font-display text-silver-bright text-sm tracking-[0.2em] uppercase">
+            Сравнение latency
+          </h2>
+          <p className="text-silver/50 font-mono text-[10px] uppercase">
+            Выберите два сервиса для анализа динамики
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -131,7 +145,7 @@ export function ComparisonView() {
               "inline-flex items-center gap-2 border px-3 py-1.5 font-mono text-[11px] uppercase transition-colors",
               compareIds.length === 2
                 ? "border-neon text-neon hover:bg-neon hover:text-void"
-                : "border-steel text-silver/40 cursor-not-allowed"
+                : "border-steel text-silver/40 cursor-not-allowed",
             )}
           >
             <Play className="size-3.5" /> Запустить тест
@@ -139,27 +153,34 @@ export function ComparisonView() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-        <div className="lg:col-span-1 flex flex-col gap-2 border border-steel bg-carbon p-3 max-h-[600px] overflow-y-auto">
-          <span className="font-mono text-[10px] text-silver/50 uppercase mb-2">Список сервисов</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
+        <div className="border-steel bg-carbon flex max-h-[600px] flex-col gap-2 overflow-y-auto border p-3 lg:col-span-1">
+          <span className="text-silver/50 mb-2 font-mono text-[10px] uppercase">
+            Список сервисов
+          </span>
           {targets.map((t) => (
             <button
               key={t.id}
               onClick={() => toggleTarget(t.id)}
               className={cn(
-                "flex items-center justify-between px-3 py-2 text-left font-mono text-[11px] transition-colors border border-transparent",
+                "flex items-center justify-between border border-transparent px-3 py-2 text-left font-mono text-[11px] transition-colors",
                 compareIds.includes(t.id)
                   ? "bg-neon/10 border-neon text-neon"
-                  : "text-silver hover:bg-steel hover:text-silver-bright"
+                  : "text-silver hover:bg-steel hover:text-silver-bright",
               )}
             >
-              <span className="truncate">{t.name}</span>
-              {compareIds.includes(t.id) && <div className="size-1.5 rounded-full bg-neon" />}
+              <span className="flex min-w-0 items-center gap-2">
+                <BrandLogo host={hostFromUrl(t.url)} name={t.name} size={16} decorative />
+                <span className="truncate">{t.name}</span>
+              </span>
+              {compareIds.includes(t.id) && (
+                <div className="bg-neon size-1.5 shrink-0 rounded-full" />
+              )}
             </button>
           ))}
         </div>
 
-        <div className="lg:col-span-3 flex flex-col gap-6">
+        <div className="flex flex-col gap-6 lg:col-span-3">
           <ComparisonChart
             targetA={targetA}
             targetB={targetB}
@@ -169,24 +190,24 @@ export function ComparisonView() {
 
           {targetA && targetB && (
             <div className="grid grid-cols-2 gap-4">
-              <div className="border border-steel bg-carbon p-4 font-mono">
-                <div className="text-[10px] text-silver/50 uppercase mb-1">{targetA.name}</div>
-                <div className="text-2xl text-neon">
+              <div className="border-steel bg-carbon border p-4 font-mono">
+                <div className="text-silver/50 mb-1 text-[10px] uppercase">{targetA.name}</div>
+                <div className="text-neon text-2xl">
                   {(() => {
                     const h = history[targetA.url];
-                    return (h && h.length > 0) ? h[h.length - 1] : "—";
+                    return h && h.length > 0 ? h[h.length - 1] : "—";
                   })()}
-                  <span className="text-xs text-silver/40 ml-1">ms</span>
+                  <span className="text-silver/40 ml-1 text-xs">ms</span>
                 </div>
               </div>
-              <div className="border border-steel bg-carbon p-4 font-mono">
-                <div className="text-[10px] text-silver/50 uppercase mb-1">{targetB.name}</div>
-                <div className="text-2xl text-ok">
+              <div className="border-steel bg-carbon border p-4 font-mono">
+                <div className="text-silver/50 mb-1 text-[10px] uppercase">{targetB.name}</div>
+                <div className="text-ok text-2xl">
                   {(() => {
                     const h = history[targetB.url];
-                    return (h && h.length > 0) ? h[h.length - 1] : "—";
+                    return h && h.length > 0 ? h[h.length - 1] : "—";
                   })()}
-                  <span className="text-xs text-silver/40 ml-1">ms</span>
+                  <span className="text-silver/40 ml-1 text-xs">ms</span>
                 </div>
               </div>
             </div>

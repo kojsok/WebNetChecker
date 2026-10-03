@@ -1,9 +1,11 @@
 "use client";
 
-import { RefreshCw, Pin, PinOff } from "lucide-react";
+import { Pin, PinOff, RefreshCw } from "lucide-react";
 import { useScanStore } from "@/store/scan-store";
 import type { CheckResult, CheckStatus } from "@/types/checker";
+import { BrandLogo } from "@/components/BrandLogo";
 import { StatusBadge } from "@/components/StatusBadge";
+import { hostFromUrl } from "@/lib/brand-logo";
 import { formatHttpStatus, formatLatency } from "@/lib/format";
 import { cn } from "@/lib/cn";
 
@@ -16,6 +18,8 @@ const STRIP: Record<CheckStatus, string> = {
   error: "bg-blocked shadow-[0_0_12px_0_#ff2244]",
   pending: "bg-neon animate-pulse-neon",
 };
+
+const EMPTY_HISTORY: number[] = [];
 
 function Sparkline({ data }: { data: number[] }) {
   if (data.length < 2) return null;
@@ -46,8 +50,6 @@ function Sparkline({ data }: { data: number[] }) {
   );
 }
 
-const EMPTY_HISTORY: number[] = [];
-
 interface Props {
   name: string;
   url: string;
@@ -63,6 +65,7 @@ export function ServiceCard({ name, url, result, pinned, onTogglePin, onRetry, o
   // Узкие селекторы: карточка перерисовывается только когда изменилась её
   // история latency — не на каждое событие стрима.
   const latencyHistory = useScanStore((s) => s.history[url] ?? EMPTY_HISTORY);
+  const host = hostFromUrl(url);
 
   return (
     <article className="group relative flex items-stretch border border-steel bg-carbon transition-colors hover:border-silver/60">
@@ -70,11 +73,14 @@ export function ServiceCard({ name, url, result, pinned, onTogglePin, onRetry, o
 
       <div className="flex min-w-0 flex-1 flex-col gap-2 p-3">
         <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <h3 className="truncate font-condensed text-sm font-semibold tracking-wide text-silver-bright uppercase">
-              {name}
-            </h3>
-            <p className="truncate font-mono text-[11px] text-silver/70">{url}</p>
+          <div className="flex min-w-0 items-start gap-2">
+            <BrandLogo host={host} name={name} size={28} className="mt-0.5" />
+            <div className="min-w-0">
+              <h3 className="truncate font-condensed text-sm font-semibold tracking-wide text-silver-bright uppercase">
+                {name}
+              </h3>
+              <p className="truncate font-mono text-[11px] text-silver/70">{url}</p>
+            </div>
           </div>
           <StatusBadge status={status} />
         </div>
