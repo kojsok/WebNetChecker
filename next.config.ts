@@ -41,6 +41,11 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Dev-only: `next dev` is also opened via 127.0.0.1 / LAN IPs. Next 16
+  // blocks /_next dev endpoints for hosts outside allowedDevOrigins
+  // (localhost is the default), and without the socket the dev client
+  // never hydrates — SSR HTML renders but every button is dead.
+  allowedDevOrigins: ["127.0.0.1"],
   // Self-contained server bundle for the Docker image (see DEPLOY.md);
   // does not affect `next start` or Vercel.
   output: "standalone",
