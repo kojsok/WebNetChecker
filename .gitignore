@@ -23,6 +23,8 @@ next-env.d.ts
 .vscode/*
 !.vscode/extensions.json
 .omo/
+.scratch/
+.zcode/
 
 # debug
 npm-debug.log*

@@ -9,6 +9,8 @@ const eslintConfig = [
       ".next/**",
       ".next_old/**",
       ".omo/**",
+      ".scratch/**",
+      ".zcode/**",
       "node_modules/**",
       "out/**",
       "build/**",
