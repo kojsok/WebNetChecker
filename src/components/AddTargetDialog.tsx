@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Upload, X } from "lucide-react";
 import { useScanStore } from "@/store/scan-store";
 import { normalizeUrl } from "@/lib/checker/normalize-url";
+import { CLIENT_LIMITS } from "@/lib/config/client-env";
 import type { Target } from "@/types/checker";
 
 interface ParsedLine {
@@ -54,36 +55,85 @@ const inputClass =
   "w-full border border-steel bg-void px-3 py-2 font-mono text-xs text-silver-bright placeholder:text-silver/40 focus-visible:border-neon focus-visible:outline-none";
 const labelClass = "font-mono text-[10px] tracking-[0.2em] text-silver/50 uppercase";
 
+const FOCUSABLE =
+  'button, input, textarea, select, a[href], [tabindex]:not([tabindex="-1"])';
+
 export function AddTargetDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const addTargets = useScanStore((s) => s.addTargets);
+  const targetCount = useScanStore((s) => s.targets.length);
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [tags, setTags] = useState("");
   const [bulk, setBulk] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+
+  // ARIA-паттерн dialog: Escape, ловушка фокуса, блокировка скролла фона.
+  useEffect(() => {
+    if (!open) return;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+
+    dialogRef.current?.querySelector<HTMLElement>(FOCUSABLE)?.focus();
+
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if (event.key !== "Tab" || !dialogRef.current) return;
+      const focusable = dialogRef.current.querySelectorAll<HTMLElement>(FOCUSABLE);
+      if (focusable.length === 0) return;
+      const first = focusable[0] as HTMLElement;
+      const last = focusable[focusable.length - 1] as HTMLElement;
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
+  const remainingCapacity = Math.max(0, CLIENT_LIMITS.maxTargets - targetCount);
+
   const submitSingle = () => {
+    if (remainingCapacity === 0) {
+      setMessage(`Достигнут максимум целей (${CLIENT_LIMITS.maxTargets})`);
+      return;
+    }
     const normalized = normalizeUrl(url);
     if (!normalized.ok) {
       setMessage(normalized.reason);
       return;
     }
-    addTargets([
-      {
-        id: `custom:${normalized.url}`,
-        name: name.trim() || normalized.host,
-        url: normalized.url,
-        category: "custom",
-        tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
-        pinned: false,
-      },
-    ]);
+    const target: Target = {
+      id: `custom:${normalized.url}`,
+      name: name.trim() || normalized.host,
+      url: normalized.url,
+      category: "custom",
+      tags: tags.split(",").map((t) => t.trim()).filter(Boolean),
+      pinned: false,
+    };
+    const before = useScanStore.getState().targets.length;
+    addTargets([target]);
+    const after = useScanStore.getState().targets.length;
+    setMessage(after > before ? "Цель добавлена" : "Такая цель уже есть в каталоге");
     setName("");
     setUrl("");
     setTags("");
-    setMessage("Цель добавлена");
   };
 
   const submitBulk = () => {
@@ -93,9 +143,22 @@ export function AddTargetDialog({ open, onClose }: { open: boolean; onClose: () 
       setMessage("Нет валидных целей");
       return;
     }
+    if (valid.length > remainingCapacity) {
+      setMessage(
+        `Максимум ${CLIENT_LIMITS.maxTargets} целей за скан: добавлено ${remainingCapacity} из ${valid.length}, остальные отклонены`,
+      );
+      addTargets(valid.slice(0, remainingCapacity));
+      setBulk("");
+      return;
+    }
+    const invalidCount = parsed.length - valid.length;
     addTargets(valid);
     setBulk("");
-    setMessage(`Добавлено целей: ${valid.length}`);
+    setMessage(
+      invalidCount > 0
+        ? `Добавлено целей: ${valid.length} · отбраковано строк: ${invalidCount}`
+        : `Добавлено целей: ${valid.length}`,
+    );
   };
 
   const onFile = async (file: File | undefined) => {
@@ -105,8 +168,14 @@ export function AddTargetDialog({ open, onClose }: { open: boolean; onClose: () 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-void/80 p-4"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Добавить цели"
@@ -185,7 +254,7 @@ export function AddTargetDialog({ open, onClose }: { open: boolean; onClose: () 
             <button
               type="button"
               onClick={submitBulk}
-              className="inline-flex items-center gap-2 border border-neon px-3 py-1.5 font-mono text-[11px] tracking-[0.15em] text-neon uppercase transition-colors hover:bg-neon hover:text-void focus-visible:outline-none"
+              className="inline-flex items-center gap-2 border border-neon px-3 py-2 font-mono text-[11px] tracking-[0.15em] text-neon uppercase transition-colors hover:bg-neon hover:text-void focus-visible:outline-none"
             >
               <Plus className="size-3.5" /> Добавить список
             </button>

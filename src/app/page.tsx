@@ -5,6 +5,7 @@ import { useScanStore } from "@/store/scan-store";
 import { useScan } from "@/hooks/useScan";
 import { useFilters, type FilteredEntry } from "@/hooks/useFilters";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { cachedScanSchema } from "@/lib/checker/result-schema";
 import { StatsHeader } from "@/components/StatsHeader";
 import { Toolbar } from "@/components/Toolbar";
 import { FilterBar } from "@/components/FilterBar";
@@ -34,9 +35,10 @@ export default function HomePage() {
       try {
         const response = await fetch("/api/scan/latest");
         if (!response.ok) return;
-        const body = (await response.json()) as { data: { results: unknown; finishedAt: string } | null };
-        if (cancelled || !body.data) return;
-        hydrateFromCache(body.data.results as never, body.data.finishedAt);
+        const body = (await response.json()) as { data: unknown };
+        const parsed = cachedScanSchema.safeParse(body.data);
+        if (cancelled || !parsed.success) return;
+        hydrateFromCache(parsed.data.results, parsed.data.finishedAt);
       } catch {
         // Кэша ещё нет.
       }

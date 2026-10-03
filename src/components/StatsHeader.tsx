@@ -62,7 +62,13 @@ export function StatsHeader() {
 
   const avg = latencyCount > 0 ? Math.round(latencySum / latencyCount) : null;
 
-  const categoryStats = CATEGORIES.map((cat) => {
+  interface CategoryStat {
+    id: string;
+    label: string;
+    percent: number;
+  }
+
+  const categoryStats = CATEGORIES.map<CategoryStat | null>((cat) => {
     const catTargets = targets.filter((t) => t.category === cat.id);
     if (catTargets.length === 0) return null;
 
@@ -70,7 +76,7 @@ export function StatsHeader() {
     const percent = Math.round((catAvailable / catTargets.length) * 100);
 
     return { id: cat.id, label: cat.label, percent };
-  }).filter(Boolean);
+  }).filter((stat): stat is CategoryStat => stat !== null);
 
   return (
     <div className="flex flex-col gap-4">
@@ -103,12 +109,12 @@ export function StatsHeader() {
 
       <div className="flex flex-wrap gap-3 border-t border-steel pt-3">
         {categoryStats.map((stat) => (
-          <div key={stat!.id} className="flex items-center gap-2 font-mono text-[10px] tracking-wide text-silver/60">
-            <span className="uppercase">{stat!.label}:</span>
+          <div key={stat.id} className="flex items-center gap-2 font-mono text-[10px] tracking-wide text-silver/60">
+            <span className="uppercase">{stat.label}:</span>
             <span className={cn(
-              stat!.percent === 100 ? "text-ok" : stat!.percent === 0 ? "text-blocked" : "text-neon"
+              stat.percent === 100 ? "text-ok" : stat.percent === 0 ? "text-blocked" : "text-neon"
             )}>
-              {stat!.percent}%
+              {stat.percent}%
             </span>
           </div>
         ))}

@@ -1,9 +1,21 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, Download, FileJson, FileSpreadsheet, Upload } from "lucide-react";
 import { useScanStore } from "@/store/scan-store";
-import { copyToClipboard, downloadFile, timestampSlug, toCsv, toJson, toText, targetsToJson, targetsToCsv, parseTargetsJson, parseTargetsCsv } from "@/lib/export";
+import {
+  copyToClipboard,
+  downloadFile,
+  timestampSlug,
+  toCsv,
+  toJson,
+  toText,
+  targetsToJson,
+  targetsToCsv,
+  parseTargetsJson,
+  parseTargetsCsv,
+} from "@/lib/export";
+import { CLIENT_LIMITS } from "@/lib/config/client-env";
 import { cn } from "@/lib/cn";
 
 const itemClass =
@@ -16,6 +28,32 @@ export function ExportMenu() {
   const addTargets = useScanStore((s) => s.addTargets);
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  // ARIA-паттерн menu: Escape и клик мимо закрывают, фокус возвращается на кнопку.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        buttonRef.current?.focus();
+      }
+    };
+    const onPointerDown = (event: PointerEvent): void => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("pointerdown", onPointerDown);
+    };
+  }, [open]);
 
   const ordered = order.flatMap((key) => {
     const result = results[key];
@@ -30,23 +68,35 @@ export function ExportMenu() {
 
   const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = "";
     if (!file) return;
 
-    try {
-      const text = await file.text();
-      const imported = file.name.endsWith(".json")
-        ? parseTargetsJson(text)
-        : parseTargetsCsv(text);
-      addTargets(imported);
+    const text = await file.text();
+    const parsed = file.name.endsWith(".json") ? parseTargetsJson(text) : parseTargetsCsv(text);
+    if (parsed.fatal) {
+      setImportMessage(parsed.fatal);
+      return;
+    }
+
+    const remainingCapacity = Math.max(0, CLIENT_LIMITS.maxTargets - targets.length);
+    const accepted = parsed.targets.slice(0, remainingCapacity);
+    const droppedByCap = parsed.targets.length - accepted.length;
+    if (accepted.length > 0) addTargets(accepted);
+
+    const parts: string[] = [`добавлено ${accepted.length}`];
+    if (parsed.invalid > 0) parts.push(`отбраковано строк: ${parsed.invalid}`);
+    if (droppedByCap > 0) parts.push(`сверх лимита ${CLIENT_LIMITS.maxTargets}: ${droppedByCap}`);
+    setImportMessage(parts.join(" · "));
+
+    if (accepted.length > 0 && parsed.invalid === 0 && droppedByCap === 0) {
       setOpen(false);
-    } catch (err) {
-      alert("Ошибка при импорте файла: " + (err instanceof Error ? err.message : "Неизвестная ошибка"));
     }
   };
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
+        ref={buttonRef}
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
@@ -59,9 +109,10 @@ export function ExportMenu() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-30 mt-1 w-64 border border-steel bg-carbon py-1 shadow-[0_8px_24px_-8px_#000]"
+          aria-label="Экспорт и импорт данных"
+          className="absolute right-0 z-30 mt-1 w-72 border border-steel bg-carbon py-1 shadow-[0_8px_24px_-8px_#000]"
         >
-          <div className="px-3 py-1 text-[10px] font-mono text-silver/40 uppercase tracking-widest border-b border-steel mb-1">
+          <div className="mb-1 border-b border-steel px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-silver/40">
             Экспорт результатов
           </div>
           {ordered.length > 0 ? (
@@ -93,10 +144,10 @@ export function ExportMenu() {
               </button>
             </>
           ) : (
-            <div className="px-3 py-2 text-[10px] font-mono text-silver/40 italic">Нет данных для экспорта</div>
+            <div className="px-3 py-2 font-mono text-[10px] italic text-silver/40">Нет данных для экспорта</div>
           )}
 
-          <div className="px-3 py-1 text-[10px] font-mono text-silver/40 uppercase tracking-widest border-y border-steel my-1">
+          <div className="my-1 border-y border-steel px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-silver/40">
             Список целей
           </div>
           <button
@@ -123,8 +174,13 @@ export function ExportMenu() {
           </button>
           <label className={cn(itemClass, "cursor-pointer")}>
             <Upload className="size-3.5" /> Импорт списка
-            <input type="file" className="sr-only" accept=".json,.csv" onChange={handleImport} />
+            <input type="file" className="sr-only" accept=".json,.csv" onChange={(e) => void handleImport(e)} />
           </label>
+          {importMessage ? (
+            <div className="border-t border-steel px-3 py-2 font-mono text-[10px] normal-case text-neon">
+              {importMessage}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

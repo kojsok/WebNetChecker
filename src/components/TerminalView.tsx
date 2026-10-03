@@ -33,7 +33,10 @@ export function TerminalView() {
           <p className="text-silver/40">$ ожидание запуска сканирования…</p>
         ) : (
           log.map((line, index) => (
-            <p key={index} className="whitespace-pre-wrap break-all">
+            <p
+              key={index}
+              className="[content-visibility:auto] [contain-intrinsic-size:auto_20px] whitespace-pre-wrap break-all"
+            >
               <span className="text-neon">$</span> {line}
             </p>
           ))

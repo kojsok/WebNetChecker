@@ -93,10 +93,13 @@ export function ServiceCard({ name, url, result, pinned, onTogglePin, onRetry, o
           </div>
           {result?.errorMessage ? (
             <div className="relative group/tip min-w-0 flex-1 truncate text-right">
-              <p className="text-[10px] text-silver/60 cursor-help underline decoration-dotted">
+              <p
+                tabIndex={0}
+                className="text-[10px] text-silver/60 cursor-help underline decoration-dotted outline-none focus-visible:text-neon"
+              >
                 {result.errorMessage}
               </p>
-              <div className="absolute bottom-full right-0 mb-2 hidden group-hover/tip:block z-20 w-max max-w-xs p-2 text-[10px] leading-tight text-silver-bright bg-graphite border border-steel shadow-xl">
+              <div className="absolute bottom-full right-0 mb-2 hidden group-hover/tip:block group-focus-within/tip:block z-20 w-max max-w-xs p-2 text-[10px] leading-tight text-silver-bright bg-graphite border border-steel shadow-xl">
                 <p className="font-bold text-neon mb-1 uppercase tracking-tighter">Детали ошибки:</p>
                 <p>{result.errorMessage}</p>
                 {result.serverHeader && (
