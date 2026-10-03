@@ -7,6 +7,8 @@ const eslintConfig = [
   {
     ignores: [
       ".next/**",
+      ".next_old/**",
+      ".omo/**",
       "node_modules/**",
       "out/**",
       "build/**",
@@ -14,6 +16,7 @@ const eslintConfig = [
       "playwright-report/**",
       "test-results/**",
       "coverage/**",
+      "*.tsbuildinfo",
     ],
   },
   ...coreWebVitals,
