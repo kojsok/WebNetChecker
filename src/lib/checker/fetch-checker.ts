@@ -3,15 +3,16 @@ import { getSafeAgent, assertUrlAllowed, SsrfError } from "./ssrf-guard";
 import { classifyError, classifyHttpStatus, errorKindToStatus } from "./classify";
 import type { CheckOptions, CheckResult, Target } from "@/types/checker";
 
-function getHeader(headers: any, name: string): string | null {
-  if (!headers) return null;
-  if (typeof headers.get === "function") return headers.get(name);
-  return headers[name.toLowerCase()] ?? headers[name] ?? null;
+type HeaderBag = Record<string, string | string[] | undefined>;
+
+function getHeader(headers: HeaderBag, name: string): string | null {
+  const value = headers[name.toLowerCase()] ?? headers[name];
+  if (value === undefined) return null;
+  return Array.isArray(value) ? value.join(", ") : value;
 }
 
-function normalizeHeaders(headers: any): Record<string, string> {
+function normalizeHeaders(headers: HeaderBag): Record<string, string> {
   const normalized: Record<string, string> = {};
-  if (!headers) return normalized;
   for (const [key, value] of Object.entries(headers)) {
     if (Array.isArray(value)) {
       normalized[key] = value.join(", ");
@@ -89,8 +90,7 @@ export async function checkTarget(target: Target, opts: CheckOptions): Promise<C
 
     const startedAt = performance.now();
     try {
-      const response = await performRequest(target.url, opts);
-      const latencyMs = Math.round(performance.now() - startedAt);
+      const { response, latencyMs } = await performRequest(target.url, opts);
       const status = classifyHttpStatus(response.statusCode);
       const serverHeader = getHeader(response.headers, "server");
 
@@ -107,6 +107,18 @@ export async function checkTarget(target: Target, opts: CheckOptions): Promise<C
       });
     } catch (error) {
       lastError = error;
+      // Client-side cancellation is not a timeout: retrying an aborted check
+      // is pointless, bail out immediately.
+      if (opts.signal?.aborted || (error instanceof Error && error.name === "AbortError")) {
+        return buildResult(target, target.url, host, {
+          status: "error",
+          httpStatus: null,
+          latencyMs: null,
+          errorKind: "unknown",
+          errorMessage: "Проверка отменена",
+          serverHeader: null,
+        });
+      }
       const classification = classifyError(error);
       // Retry only on timeout, and only while attempts remain.
       const isLastAttempt = attempt === maxAttempts - 1;
@@ -144,14 +156,19 @@ interface MinimalResponse {
 
 /**
  * Issue the HTTP request with HEAD, falling back to GET on 405/403/501.
- * Only the status line and headers are used.
+ * Only the status line and headers are used. The reported latency covers the
+ * request that produced the verdict, not a preceding rejected HEAD.
  */
-async function performRequest(url: string, opts: CheckOptions): Promise<MinimalResponse> {
+async function performRequest(
+  url: string,
+  opts: CheckOptions,
+): Promise<{ response: MinimalResponse; latencyMs: number }> {
   const headers = {
     "user-agent": "WebNetChecker/1.0 (+availability-check)",
     accept: "*/*",
   };
 
+  const headStartedAt = performance.now();
   const headResponse = await request(url, {
     method: "HEAD",
     headers,
@@ -163,6 +180,7 @@ async function performRequest(url: string, opts: CheckOptions): Promise<MinimalR
 
   if ([403, 405, 501].includes(headResponse.statusCode)) {
     await headResponse.body.dump();
+    const getStartedAt = performance.now();
     const getResponse = await request(url, {
       method: "GET",
       headers: { ...headers, range: "bytes=0-0" },
@@ -172,15 +190,21 @@ async function performRequest(url: string, opts: CheckOptions): Promise<MinimalR
       bodyTimeout: opts.timeoutMs,
     });
     return {
-      statusCode: getResponse.statusCode,
-      headers: normalizeHeaders(getResponse.headers),
-      body: getResponse.body,
+      response: {
+        statusCode: getResponse.statusCode,
+        headers: normalizeHeaders(getResponse.headers),
+        body: getResponse.body,
+      },
+      latencyMs: Math.round(performance.now() - getStartedAt),
     };
   }
 
   return {
-    statusCode: headResponse.statusCode,
-    headers: normalizeHeaders(headResponse.headers),
-    body: headResponse.body,
+    response: {
+      statusCode: headResponse.statusCode,
+      headers: normalizeHeaders(headResponse.headers),
+      body: headResponse.body,
+    },
+    latencyMs: Math.round(performance.now() - headStartedAt),
   };
 }

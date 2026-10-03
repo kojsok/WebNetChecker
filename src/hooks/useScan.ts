@@ -20,7 +20,9 @@ export function useScan() {
       beginScan(targets.length);
 
       try {
-        const response = await fetch("/api/scan", {
+        // Same-origin UI endpoint: SCAN_API_KEY (if configured) is applied
+        // server-side, so the dashboard keeps working when the key is set.
+        const response = await fetch("/api/scan/run", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({

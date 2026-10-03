@@ -47,14 +47,36 @@ export function createMemoryRateLimiter(limit: number, windowMs: number): RateLi
   };
 }
 
-/** Best-effort client IP from proxy headers, falling back to a shared bucket. */
-export function getClientKey(request: Request): string {
+export interface ClientKeyOptions {
+  /**
+   * True only behind a trusted reverse proxy that REPLACES/appends the real
+   * client IP to x-forwarded-for. Then the LAST chain entry is the real client.
+   */
+  trustProxy: boolean;
+}
+
+/**
+ * Best-effort client key for rate limiting.
+ *
+ * Trust model:
+ * - `trustProxy: true` — the LAST x-forwarded-for entry is authoritative
+ *   (nginx `proxy_add_x_forwarded_for` appends the real IP at the end; a
+ *   spoofed pre-value is irrelevant because we read the tail).
+ * - `trustProxy: false` — proxy headers are fully client-controlled. We still
+ *   use the first entry as a best-effort key to isolate casual clients, but a
+ *   rotating spoofer defeats it; the global reserve bucket on the scan route
+ *   is the actual barrier (see scan-handler).
+ */
+export function getClientKey(request: Request, options: ClientKeyOptions): string {
   const forwarded = request.headers.get("x-forwarded-for");
   if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+    const parts = forwarded.split(",").map((p) => p.trim()).filter(Boolean);
+    const key = options.trustProxy ? (parts[parts.length - 1] ?? "") : (parts[0] ?? "");
+    if (key) return key;
   }
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp;
+  if (options.trustProxy) {
+    const realIp = request.headers.get("x-real-ip");
+    if (realIp) return realIp.trim();
+  }
   return "unknown";
 }

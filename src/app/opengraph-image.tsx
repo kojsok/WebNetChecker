@@ -1,6 +1,7 @@
 import { ImageResponse } from "next/og";
 
-export const runtime = "edge";
+// Node.js runtime: edge is deprecated in Next 16 and disables static generation.
+export const runtime = "nodejs";
 
 export default function OpenGraphImage(): ImageResponse {
   return new ImageResponse(
