@@ -1,0 +1,24 @@
+services:
+  webnetchecker:
+    build: .
+    image: webnetchecker:latest
+    restart: unless-stopped
+    # Наружу отдаёт reverse-proxy (nginx) — контейнер слушает только localhost.
+    # Без прокси замените на "3000:3000" и оставьте TRUST_PROXY=0 (см. DEPLOY.md).
+    ports:
+      - "127.0.0.1:3000:3000"
+    env_file: .env
+    environment:
+      # За nginx реальный IP клиента — последний элемент x-forwarded-for.
+      TRUST_PROXY: "1"
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -qO-
+        - http://127.0.0.1:3000/api/scan/latest
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s

@@ -221,14 +221,25 @@ function tooManyRequests(resetAt: number): NextResponse {
 /**
  * Only seed-catalog results are cached server-side: the /latest endpoint is
  * global per instance, so custom targets would leak one visitor's input to
- * everyone else.
+ * everyone else. Partial scans (retry, compare) MERGE into the cached full
+ * scan instead of overwriting it with a couple of fresh rows.
  */
 function cacheSeedResults(collected: readonly CheckResult[], cache: ReturnType<typeof getScanCache>): void {
   const seedResults = collected.filter((result) => SEED_URLS.has(result.url));
   if (seedResults.length === 0) return;
+
+  const merged = new Map<string, CheckResult>();
+  for (const previous of cache.get()?.results ?? []) {
+    merged.set(previous.url, previous);
+  }
+  for (const result of seedResults) {
+    merged.set(result.url, result);
+  }
+
+  const results = [...merged.values()];
   cache.set({
     finishedAt: new Date().toISOString(),
-    results: seedResults,
-    summary: summarize(seedResults),
+    results,
+    summary: summarize(results),
   });
 }

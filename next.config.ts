@@ -41,6 +41,9 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  // Self-contained server bundle for the Docker image (see DEPLOY.md);
+  // does not affect `next start` or Vercel.
+  output: "standalone",
   async headers() {
     return [
       {
