@@ -3,13 +3,31 @@
 import { create } from "zustand";
 import { SEED_TARGETS } from "@/lib/config/services";
 import { normalizeUrl } from "@/lib/checker/normalize-url";
-import type { CheckResult, CheckStatus, Target } from "@/types/checker";
+import type { CheckResult, Target } from "@/types/checker";
 import type { ScanEvent } from "@/types/scan";
-import { isFailed, isHealthy } from "@/lib/format";
+import { terminalLine } from "@/lib/format";
 
 export type ViewMode = "cards" | "terminal" | "compare";
 export type SortKey = "name" | "latency" | "status";
 export type StatusFilter = "all" | "available" | "blocked" | "failed";
+
+export interface RejectedTarget {
+  url: string;
+  reason: string;
+}
+
+/** Terminal log length cap: the log is a live feed, not an archive. */
+const LOG_CAP = 500;
+
+function normalizeTarget(t: Target): Target {
+  const res = normalizeUrl(t.url);
+  const url = res.ok ? res.url : t.url;
+  return { ...t, url, tags: t.tags ?? [], pinned: t.pinned ?? false };
+}
+
+function seedTargets(): Target[] {
+  return SEED_TARGETS.map((t) => normalizeTarget({ ...t }));
+}
 
 export interface ScanState {
   targets: Target[];
@@ -18,10 +36,16 @@ export interface ScanState {
   order: string[];
   log: string[];
   isScanning: boolean;
+  /** Number of scans in flight (main + isolated retries); drives isScanning. */
+  activeScans: number;
+  /** URLs of the current main scan: the scope for progress and history. */
+  scanUrls: string[];
   completed: number;
   total: number;
   lastRunAt: string | null;
+  lastScanAborted: boolean;
   error: string | null;
+  rejected: RejectedTarget[] | null;
   mode: ViewMode;
   query: string;
   categoryFilter: string;
@@ -37,9 +61,14 @@ export interface ScanState {
   togglePin: (id: string) => void;
   updateTags: (id: string, tags: string[]) => void;
   setCompareTargets: (ids: string[]) => void;
-  beginScan: (total: number) => void;
+  /** Start of a main scan: resets progress and scopes history to these URLs. */
+  beginScan: (total: number, urls: readonly string[]) => void;
+  beginIsolatedScan: () => void;
   applyEvent: (event: ScanEvent) => void;
+  /** Record a result without touching main-scan progress (isolated retries). */
+  applyResult: (result: CheckResult) => void;
   endScan: () => void;
+  clearRejected: () => void;
   setMode: (mode: ViewMode) => void;
   setQuery: (query: string) => void;
   setCategoryFilter: (category: string) => void;
@@ -51,19 +80,20 @@ export interface ScanState {
 }
 
 export const useScanStore = create<ScanState>((set) => ({
-  targets: SEED_TARGETS.map((t) => {
-    const res = normalizeUrl(t.url);
-    return res.ok ? { ...t, url: res.url, tags: [], pinned: false } : { ...t, tags: [], pinned: false };
-  }),
+  targets: seedTargets(),
   results: {},
   history: {},
   order: [],
   log: [],
   isScanning: false,
+  activeScans: 0,
+  scanUrls: [],
   completed: 0,
   total: SEED_TARGETS.length,
   lastRunAt: null,
+  lastScanAborted: false,
   error: null,
+  rejected: null,
   mode: "cards",
   query: "",
   categoryFilter: "all",
@@ -74,19 +104,13 @@ export const useScanStore = create<ScanState>((set) => ({
   compareTargets: [],
 
   setTargets: (targets) => {
-    const normalized = targets.map((t) => {
-      const res = normalizeUrl(t.url);
-      return res.ok ? { ...t, url: res.url, tags: t.tags ?? [], pinned: t.pinned ?? false } : { ...t, tags: t.tags ?? [], pinned: t.pinned ?? false };
-    });
+    const normalized = targets.map(normalizeTarget);
     set({ targets: normalized, results: {}, history: {}, order: [], log: [], completed: 0, total: normalized.length });
   },
 
   addTargets: (incoming) =>
     set((state) => {
-      const normalizedIncoming = incoming.map((t) => {
-        const res = normalizeUrl(t.url);
-        return res.ok ? { ...t, url: res.url, tags: t.tags ?? [], pinned: t.pinned ?? false } : { ...t, tags: t.tags ?? [], pinned: t.pinned ?? false };
-      });
+      const normalizedIncoming = incoming.map(normalizeTarget);
 
       const existing = new Set(state.targets.map((t) => t.url));
       const merged = [...state.targets];
@@ -121,7 +145,25 @@ export const useScanStore = create<ScanState>((set) => ({
 
   setCompareTargets: (ids) => set({ compareTargets: ids }),
 
-  beginScan: (total) => set({ isScanning: true, completed: 0, total, error: null }),
+  beginScan: (total, urls) =>
+    set({
+      isScanning: true,
+      activeScans: useScanStore.getState().activeScans + 1,
+      scanUrls: [...urls],
+      completed: 0,
+      total,
+      error: null,
+      rejected: null,
+      lastScanAborted: false,
+    }),
+
+  beginIsolatedScan: () =>
+    set({
+      isScanning: true,
+      activeScans: useScanStore.getState().activeScans + 1,
+      error: null,
+      rejected: null,
+    }),
 
   applyEvent: (event) =>
     set((state) => {
@@ -129,37 +171,31 @@ export const useScanStore = create<ScanState>((set) => ({
         return { isScanning: true, total: event.total, completed: 0 };
       }
       if (event.type === "result") {
-        const result = event.result;
-        const results = { ...state.results, [result.url]: result };
-        const order = state.order.includes(result.url)
-          ? state.order
-          : [...state.order, result.url];
-
-        const history = { ...state.history };
-        if (result.latencyMs !== null) {
-          const h = history[result.url] ?? [];
-          history[result.url] = [...h, result.latencyMs].slice(-10);
-        }
-
-        return {
-          results,
-          order,
-          history,
-          completed: event.completed,
-          log: [...state.log, terminalLineSafe(result)],
-        };
+        return reduceResult(state, event.result, event.completed);
+      }
+      if (event.type === "rejected") {
+        return { rejected: event.items };
       }
       if (event.type === "done") {
         return {
-          isScanning: false,
+          isScanning: state.activeScans > 1,
           completed: event.completed,
           lastRunAt: new Date().toISOString(),
+          lastScanAborted: event.aborted,
         };
       }
       return { error: event.message };
     }),
 
-  endScan: () => set({ isScanning: false }),
+  applyResult: (result) => set((state) => reduceResult(state, result, state.completed)),
+
+  endScan: () =>
+    set((state) => {
+      const activeScans = Math.max(0, state.activeScans - 1);
+      return { activeScans, isScanning: activeScans > 0 };
+    }),
+
+  clearRejected: () => set({ rejected: null }),
 
   setMode: (mode) => set({ mode }),
   setQuery: (query) => set({ query }),
@@ -187,27 +223,32 @@ export const useScanStore = create<ScanState>((set) => ({
         history,
         lastRunAt: finishedAt,
         completed: results.length,
-        log: results.map(terminalLineSafe),
+        log: results.map(terminalLine),
       };
     }),
 }));
 
-function terminalLineSafe(result: CheckResult): string {
-  const emoji = statusToEmoji(result.status);
-  const latency = result.latencyMs !== null ? ` — ${result.latencyMs}ms` : "";
-  const tail =
-    result.httpStatus !== null
-      ? ` — ${result.httpStatus} OK`
-      : result.errorMessage
-        ? ` — ${result.errorMessage}`
-        : "";
-  return `${emoji} ${result.name} (${result.host})${latency}${tail}`;
-}
+function reduceResult(
+  state: ScanState,
+  result: CheckResult,
+  completed: number,
+): Partial<ScanState> {
+  const results = { ...state.results, [result.url]: result };
+  const order = state.order.includes(result.url)
+    ? state.order
+    : [...state.order, result.url];
 
-function statusToEmoji(status: CheckStatus): string {
-  if (isHealthy(status)) return "✅";
-  if (status === "blocked") return "⛔";
-  if (status === "timeout") return "⏱️";
-  if (isFailed(status)) return "❌";
-  return "⏳";
+  const history = { ...state.history };
+  if (result.latencyMs !== null) {
+    const h = history[result.url] ?? [];
+    history[result.url] = [...h, result.latencyMs].slice(-10);
+  }
+
+  return {
+    results,
+    order,
+    history,
+    completed,
+    log: [...state.log, terminalLine(result)].slice(-LOG_CAP),
+  };
 }

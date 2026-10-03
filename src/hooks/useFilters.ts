@@ -10,6 +10,8 @@ export interface FilteredEntry {
   targetName: string;
   targetCategory: string;
   targetUrl: string;
+  pinned: boolean;
+  tags: string[];
   result: CheckResult | null;
 }
 
@@ -18,23 +20,29 @@ export function useFilters(): FilteredEntry[] {
   const results = useScanStore((s) => s.results);
   const query = useScanStore((s) => s.query);
   const categoryFilter = useScanStore((s) => s.categoryFilter);
+  const tagFilter = useScanStore((s) => s.tagFilter);
   const statusFilter = useScanStore((s) => s.statusFilter);
   const sortKey = useScanStore((s) => s.sortKey);
-  const tagFilter = useScanStore((s) => s.tagFilter);
 
   return useMemo(() => {
     const needle = query.trim().toLowerCase();
+
+    // Map one pass instead of targets.find per entry (O(n²) → O(n)).
+    const byId = new Map(targets.map((t) => [t.id, t]));
 
     const entries: FilteredEntry[] = targets.map((target) => ({
       targetId: target.id,
       targetName: target.name,
       targetCategory: target.category,
       targetUrl: target.url,
+      pinned: target.pinned,
+      tags: target.tags,
       result: results[target.url] ?? null,
     }));
 
     const filtered = entries.filter((entry) => {
-      const target = targets.find((t) => t.id === entry.targetId);
+      const target = byId.get(entry.targetId);
+
       if (categoryFilter !== "all" && entry.targetCategory !== categoryFilter) return false;
 
       if (tagFilter && !target?.tags.includes(tagFilter)) return false;
@@ -68,5 +76,5 @@ export function useFilters(): FilteredEntry[] {
     });
 
     return filtered;
-  }, [targets, results, query, categoryFilter, statusFilter, sortKey]);
+  }, [targets, results, query, categoryFilter, tagFilter, statusFilter, sortKey]);
 }

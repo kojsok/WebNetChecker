@@ -1,6 +1,7 @@
 "use client";
 
-import { Search } from "lucide-react";
+import { useMemo } from "react";
+import { Search, Tag } from "lucide-react";
 import { useScanStore, type SortKey, type StatusFilter } from "@/store/scan-store";
 import { CATEGORIES } from "@/lib/config/categories";
 
@@ -25,10 +26,25 @@ export function FilterBar() {
   const setQuery = useScanStore((s) => s.setQuery);
   const categoryFilter = useScanStore((s) => s.categoryFilter);
   const setCategoryFilter = useScanStore((s) => s.setCategoryFilter);
+  const tagFilter = useScanStore((s) => s.tagFilter);
+  const setTagFilter = useScanStore((s) => s.setTagFilter);
   const statusFilter = useScanStore((s) => s.statusFilter);
   const setStatusFilter = useScanStore((s) => s.setStatusFilter);
   const sortKey = useScanStore((s) => s.sortKey);
   const setSortKey = useScanStore((s) => s.setSortKey);
+  const targets = useScanStore((s) => s.targets);
+
+  const tagOptions = useMemo(() => {
+    const tags = new Set<string>();
+    for (const target of targets) {
+      for (const tag of target.tags) {
+        if (tag) tags.add(tag);
+      }
+    }
+    const list = [...tags].sort((a, b) => a.localeCompare(b, "ru"));
+    if (tagFilter && !tags.has(tagFilter)) list.unshift(tagFilter);
+    return list;
+  }, [targets, tagFilter]);
 
   return (
     <div className="flex flex-wrap items-center gap-2 border border-steel bg-carbon/80 p-2 backdrop-blur">
@@ -60,6 +76,31 @@ export function FilterBar() {
           </option>
         ))}
       </select>
+
+      <label className="sr-only" htmlFor="filter-tag">
+        Тег
+      </label>
+      <span className="relative inline-flex items-center">
+        <Tag
+          aria-hidden
+          className={`pointer-events-none absolute left-1.5 size-3 ${tagFilter ? "text-neon" : "text-silver/40"}`}
+        />
+        <select
+          id="filter-tag"
+          value={tagFilter ?? ""}
+          onChange={(e) => setTagFilter(e.target.value === "" ? null : e.target.value)}
+          className={`${selectClass} pl-6 disabled:opacity-50`}
+          disabled={tagOptions.length === 0 && !tagFilter}
+          aria-label="Фильтр по тегу"
+        >
+          <option value="">Все теги</option>
+          {tagOptions.map((tag) => (
+            <option key={tag} value={tag}>
+              {tag}
+            </option>
+          ))}
+        </select>
+      </span>
 
       <label className="sr-only" htmlFor="filter-status">
         Статус

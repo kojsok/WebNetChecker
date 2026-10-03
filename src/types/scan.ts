@@ -3,6 +3,7 @@ import type { CheckResult } from "./checker";
 export type ScanEvent =
   | { type: "start"; total: number; startedAt: string }
   | { type: "result"; result: CheckResult; completed: number; total: number }
+  | { type: "rejected"; items: RejectedTarget[] }
   | {
       type: "done";
       total: number;
@@ -11,6 +12,11 @@ export type ScanEvent =
       aborted: boolean;
     }
   | { type: "error"; message: string };
+
+export interface RejectedTarget {
+  url: string;
+  reason: string;
+}
 
 export interface ScanRequestTarget {
   id?: string;

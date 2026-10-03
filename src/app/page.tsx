@@ -5,7 +5,6 @@ import { useScanStore } from "@/store/scan-store";
 import { useScan } from "@/hooks/useScan";
 import { useFilters, type FilteredEntry } from "@/hooks/useFilters";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
-import { useHistory } from "@/hooks/useHistory";
 import { StatsHeader } from "@/components/StatsHeader";
 import { Toolbar } from "@/components/Toolbar";
 import { FilterBar } from "@/components/FilterBar";
@@ -19,14 +18,15 @@ import { CATEGORIES, getCategory } from "@/lib/config/categories";
 export default function HomePage() {
   const targets = useScanStore((s) => s.targets);
   const mode = useScanStore((s) => s.mode);
-  const isScanning = useScanStore((s) => s.isScanning);
   const removeTarget = useScanStore((s) => s.removeTarget);
+  const togglePin = useScanStore((s) => s.togglePin);
   const hydrateFromCache = useScanStore((s) => s.hydrateFromCache);
   const error = useScanStore((s) => s.error);
+  const rejected = useScanStore((s) => s.rejected);
+  const lastScanAborted = useScanStore((s) => s.lastScanAborted);
 
   const { start, cancel } = useScan();
   const entries = useFilters();
-  const { push: pushHistory } = useHistory();
 
   useEffect(() => {
     let cancelled = false;
@@ -53,24 +53,6 @@ export default function HomePage() {
 
   useAutoRefresh(targets, runAll);
 
-  useEffect(() => {
-    if (!isScanning) return;
-    let wasScanning = true;
-    const check = () => {
-      const results = useScanStore.getState().results;
-      const order = useScanStore.getState().order;
-      if (wasScanning && !useScanStore.getState().isScanning && order.length > 0) {
-        const finishedResults = order.map((key) => results[key]).filter((r): r is NonNullable<typeof r> => !!r);
-        if (finishedResults.length > 0) {
-          pushHistory(finishedResults);
-        }
-      }
-      wasScanning = useScanStore.getState().isScanning;
-    };
-    const interval = setInterval(check, 500);
-    return () => clearInterval(interval);
-  }, [isScanning, pushHistory]);
-
   const grouped = useMemo(() => {
     const map = new Map<string, FilteredEntry[]>();
     for (const entry of entries) {
@@ -92,19 +74,22 @@ export default function HomePage() {
     return ordered;
   }, [entries]);
 
-  const pinnedEntries = useMemo(() => {
-    return entries.filter((entry) => {
-      const target = useScanStore.getState().targets.find((t) => t.id === entry.targetId);
-      return target?.pinned;
-    });
-  }, [entries]);
+  const pinnedEntries = useMemo(() => entries.filter((entry) => entry.pinned), [entries]);
 
   const retryOne = useCallback(
     (entry: FilteredEntry) => {
       const target = useScanStore.getState().targets.find((t) => t.id === entry.targetId);
-      if (target) void start([target]);
+      // Изолированный мини-скан: идущий скан не прерываем, прогресс не сбрасываем.
+      if (target) void start([target], { isolated: true });
     },
     [start],
+  );
+
+  const pinOne = useCallback(
+    (entry: FilteredEntry) => {
+      togglePin(entry.targetId);
+    },
+    [togglePin],
   );
 
   const removeOne = useCallback(
@@ -125,13 +110,36 @@ export default function HomePage() {
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Toolbar onRun={runAll} onCancel={cancel} />
-          {error ? <p className="font-mono text-[11px] text-blocked">{error}</p> : null}
+          <div className="flex flex-col items-end gap-1">
+            {error ? <p className="font-mono text-[11px] text-blocked">{error}</p> : null}
+            {lastScanAborted && !error ? (
+              <p className="font-mono text-[11px] text-silver/60">Скан прерван</p>
+            ) : null}
+          </div>
         </div>
       </header>
 
       <div className="sticky top-0 z-10">
         <FilterBar />
       </div>
+
+      {rejected && rejected.length > 0 ? (
+        <div
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-1 border border-blocked/50 bg-blocked/10 p-3 font-mono text-[11px] text-silver"
+        >
+          <span className="uppercase tracking-wide text-blocked">
+            Отклонено целей: {rejected.length}
+          </span>
+          <span className="text-silver/70">
+            {rejected
+              .slice(0, 3)
+              .map((item) => `${item.url} — ${item.reason}`)
+              .join(" · ")}
+          </span>
+          {rejected.length > 3 ? <span className="text-silver/50">…и ещё {rejected.length - 3}</span> : null}
+        </div>
+      ) : null}
 
       <ScanProgress />
 
@@ -153,6 +161,7 @@ export default function HomePage() {
               label="Закрепленные"
               entries={pinnedEntries}
               onRetry={retryOne}
+              onTogglePin={pinOne}
               onRemove={removeOne}
               onRemoveEnabled={false}
             />
@@ -163,6 +172,7 @@ export default function HomePage() {
               label={group.label}
               entries={group.items}
               onRetry={retryOne}
+              onTogglePin={pinOne}
               onRemove={removeOne}
               onRemoveEnabled={group.id === "custom"}
             />

@@ -2,7 +2,7 @@
 
 import { useScanStore } from "@/store/scan-store";
 import { useScan } from "@/hooks/useScan";
-import { Target } from "@/types/checker";
+import type { Target } from "@/types/checker";
 import { cn } from "@/lib/cn";
 import { Play } from "lucide-react";
 
@@ -110,8 +110,9 @@ export function ComparisonView() {
   };
 
   const runCompareScan = () => {
+    // Изолированный мини-скан: не прерывает общий скан и не сбрасывает прогресс.
     if (targetA && targetB) {
-      void start([targetA, targetB]);
+      void start([targetA, targetB], { isolated: true });
     }
   };
 

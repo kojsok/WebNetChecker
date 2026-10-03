@@ -7,11 +7,12 @@ interface Props {
   label: string;
   entries: FilteredEntry[];
   onRetry: (entry: FilteredEntry) => void;
+  onTogglePin: (entry: FilteredEntry) => void;
   onRemove?: (entry: FilteredEntry) => void;
   onRemoveEnabled: boolean;
 }
 
-export function CategorySection({ label, entries, onRetry, onRemove, onRemoveEnabled }: Props) {
+export function CategorySection({ label, entries, onRetry, onTogglePin, onRemove, onRemoveEnabled }: Props) {
   if (entries.length === 0) return null;
 
   return (
@@ -30,6 +31,8 @@ export function CategorySection({ label, entries, onRetry, onRemove, onRemoveEna
             name={entry.targetName}
             url={entry.targetUrl}
             result={entry.result}
+            pinned={entry.pinned}
+            onTogglePin={() => onTogglePin(entry)}
             onRetry={() => onRetry(entry)}
             onRemove={onRemoveEnabled && onRemove ? () => onRemove(entry) : undefined}
           />

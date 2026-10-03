@@ -38,12 +38,18 @@ export function formatHttpStatus(status: number | null): string {
   return status === null ? "—" : String(status);
 }
 
+/** Short HTTP-code verdict for the terminal-style line: no more "403 OK". */
+function httpVerdict(status: CheckStatus): string {
+  if (status === "available") return "OK";
+  return STATUS_LABELS[status];
+}
+
 export function terminalLine(result: CheckResult): string {
   const emoji = statusEmoji(result.status);
   const latency = result.latencyMs !== null ? ` — ${result.latencyMs}ms` : "";
   const http =
     result.httpStatus !== null
-      ? ` — ${result.httpStatus} OK`
+      ? ` — ${result.httpStatus} ${httpVerdict(result.status)}`
       : result.errorMessage
         ? ` — ${result.errorMessage}`
         : "";

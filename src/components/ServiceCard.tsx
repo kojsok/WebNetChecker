@@ -46,20 +46,23 @@ function Sparkline({ data }: { data: number[] }) {
   );
 }
 
+const EMPTY_HISTORY: number[] = [];
+
 interface Props {
   name: string;
   url: string;
   result: CheckResult | null;
+  pinned: boolean;
+  onTogglePin: () => void;
   onRetry?: () => void;
   onRemove?: () => void;
 }
 
-export function ServiceCard({ name, url, result, onRetry, onRemove }: Props) {
+export function ServiceCard({ name, url, result, pinned, onTogglePin, onRetry, onRemove }: Props) {
   const status: CheckStatus = result?.status ?? "pending";
-  const { history, togglePin, targets } = useScanStore();
-  const target = targets.find((t) => t.url === url);
-  const isPinned = target?.pinned ?? false;
-  const latencyHistory = history[url] ?? [];
+  // Узкие селекторы: карточка перерисовывается только когда изменилась её
+  // история latency — не на каждое событие стрима.
+  const latencyHistory = useScanStore((s) => s.history[url] ?? EMPTY_HISTORY);
 
   return (
     <article className="group relative flex items-stretch border border-steel bg-carbon transition-colors hover:border-silver/60">
@@ -110,14 +113,14 @@ export function ServiceCard({ name, url, result, onRetry, onRemove }: Props) {
       <div className="flex flex-col border-l border-steel">
         <button
           type="button"
-          onClick={() => togglePin(target?.id ?? "")}
-          aria-label="Закрепить"
+          onClick={onTogglePin}
+          aria-label={pinned ? "Открепить" : "Закрепить"}
           className={cn(
             "flex flex-1 items-center justify-center px-2 transition-colors focus-visible:outline-none",
-            isPinned ? "bg-neon/10 text-neon" : "text-silver/50 hover:bg-steel hover:text-neon"
+            pinned ? "bg-neon/10 text-neon" : "text-silver/50 hover:bg-steel hover:text-neon",
           )}
         >
-          {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+          {pinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
         </button>
         {onRetry ? (
           <button

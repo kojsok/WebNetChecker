@@ -175,7 +175,7 @@ export async function handleScanRequest(request: Request, options: ScanHandlerOp
       void (async () => {
         try {
           if (rejected.length > 0) {
-            safeEnqueue(encoder.encode(encodeEvent({ type: "error", message: "Часть целей отклонена" })));
+            safeEnqueue(encoder.encode(encodeEvent({ type: "rejected", items: rejected })));
           }
           for await (const event of streamScan(targets, options2, request.signal)) {
             if (event.type === "result") collected.push(event.result);
