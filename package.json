@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "next dev",
+    "dev:restart": "kill $(lsof -ti tcp:3000) 2>/dev/null; next dev",
+    "dev:clean": "kill $(lsof -ti tcp:3000) 2>/dev/null; rm -rf .next && next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

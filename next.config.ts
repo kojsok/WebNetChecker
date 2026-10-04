@@ -20,7 +20,11 @@ const csp = [
   "base-uri 'self'",
   "form-action 'self'",
   "frame-ancestors 'none'",
-  "upgrade-insecure-requests",
+  // Prod-only: in dev Chrome rewrites every http:// subresource to https://
+  // (ERR_SSL_PROTOCOL_ERROR) on non-localhost hosts like the LAN IP, so CSS/JS
+  // never load and the UI renders SSR-only with dead buttons. Chrome exempts
+  // localhost, which is why dev on localhost kept working.
+  ...(!isDev ? ["upgrade-insecure-requests"] : []),
 ].join("; ");
 
 const securityHeaders = [
@@ -43,9 +47,10 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   // Dev-only: `next dev` is also opened via 127.0.0.1 / LAN IPs. Next 16
   // blocks /_next dev endpoints for hosts outside allowedDevOrigins
-  // (localhost is the default), and without the socket the dev client
-  // never hydrates — SSR HTML renders but every button is dead.
-  allowedDevOrigins: ["127.0.0.1"],
+  // (localhost is the default): CSS/JS answer 403, so styles are missing
+  // and the dev client never hydrates — SSR HTML renders but every button
+  // is dead. `192.168.1.*` covers the LAN subnet; DHCP may change the host.
+  allowedDevOrigins: ["127.0.0.1", "192.168.1.*"],
   // Self-contained server bundle for the Docker image (see DEPLOY.md);
   // does not affect `next start` or Vercel.
   output: "standalone",
